@@ -1,0 +1,35 @@
+# 1) Env
+conda activate sd21-lora
+pip install --upgrade "diffusers>=0.30.0" transformers accelerate datasets peft safetensors pillow xformers
+
+# 2) Make captions
+python tools/csv_to_txt_captions.py airport-fire lithium-battery-fire
+mkdir -p data/fire-lora && cp airport-fire/* data/fire-lora/ && cp lithium-battery-fire/* data/fire-lora/
+
+# 3) Get script + accelerate config
+curl -L https://raw.githubusercontent.com/huggingface/diffusers/main/examples/text_to_image/train_text_to_image_lora.py -o scripts/train_text_to_image_lora.py
+accelerate config default
+
+# 4) Train
+accelerate launch scripts/train_text_to_image_lora.py \
+  --pretrained_model_name_or_path="stabilityai/stable-diffusion-2-1-base" \
+  --train_data_dir="data/fire-lora" --resolution=512 --center_crop --random_flip \
+  --train_batch_size=4 --gradient_accumulation_steps=4 \
+  --learning_rate=1e-4 --lr_scheduler=cosine --lr_warmup_steps=200 \
+  --max_train_steps=6000 --mixed_precision=bf16 --use_8bit_adam \
+  --rank=16 --lora_alpha=16 --lora_dropout=0.0 \
+  --checkpointing_steps=1000 \
+  --validation_prompt="airport fire on runway, foam suppression, thick smoke, realistic, cinematic lighting" \
+  --validation_steps=1000 \
+  --output_dir="runs/lora_sd21_fire"
+
+# 5) Inference
+python - <<'PY'
+import torch
+from diffusers import StableDiffusionPipeline
+pipe = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1-base", torch_dtype=torch.float16).to("cuda")
+pipe.load_lora_weights("runs/lora_sd21_fire")
+img = pipe("lithium battery fire in workshop, thermal runaway, realistic, cinematic", num_inference_steps=30, guidance_scale=7.5).images[0]
+img.save("sample_fire.png")
+print("Saved sample_fire.png")
+PY

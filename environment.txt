@@ -1,0 +1,6 @@
+pip install \
+  torch==2.8.0+cu128 torchvision==0.23.0+cu128 \
+  diffusers==0.36.0.dev0 accelerate==1.10.1 \
+  transformers==4.45.1 peft==0.17.1 tokenizers==0.20.3 \
+  datasets==2.13.2 safetensors==0.6.2 \
+  xformers==0.0.32.post2
